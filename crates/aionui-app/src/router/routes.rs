@@ -425,6 +425,7 @@ pub fn create_router_with_all_state(services: &AppServices, states: ModuleStates
     #[cfg(feature = "weixin")]
     let router = router.merge(weixin_login_authenticated);
 
+    let router = super::newapi_fork::merge_newapi_routes(router, services, auth_mw_state.clone()); // fork(newapi)
     let router = if services.identity_mode.is_local() {
         router
     } else {

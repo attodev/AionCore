@@ -7,6 +7,7 @@ pub mod diagnostics;
 pub mod error;
 pub mod keep_awake;
 pub mod model_fetcher;
+pub mod newapi_auth; // fork(newapi)
 pub mod protocol;
 pub mod provider;
 pub mod routes;
@@ -21,6 +22,7 @@ pub use diagnostics::FeedbackDiagnosticsService;
 pub use error::SystemError;
 pub use keep_awake::{KeepAwakeController, NoopKeepAwakeController, SystemKeepAwakeController};
 pub use model_fetcher::ModelFetchService;
+pub use newapi_auth::{NewApiAuthService, NewApiClient, newapi_auth_routes}; // fork(newapi)
 pub use protocol::ProtocolDetectionService;
 pub use provider::ProviderService;
 pub use routes::{SystemRouterState, settings_routes, system_routes};

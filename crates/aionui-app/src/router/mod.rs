@@ -5,6 +5,7 @@ mod clipboard_writer;
 mod fs_monitor;
 mod health;
 mod item_revealer;
+mod newapi_fork; // fork(newapi)
 mod routes;
 mod runtime_team_tools;
 mod scm_monitor;

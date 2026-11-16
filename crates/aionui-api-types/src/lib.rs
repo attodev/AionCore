@@ -22,6 +22,7 @@ mod extension;
 mod file;
 mod lifecycle;
 mod mcp;
+mod newapi_auth; // fork(newapi)
 mod office;
 mod project;
 mod provider;
@@ -138,6 +139,10 @@ pub use mcp::{
     ImportMcpServerRequest, McpAuthMethod, McpConnectionTestErrorCode, McpConnectionTestResult, McpServerResponse,
     McpToolResponse, McpTransport, OAuthCheckStatusRequest, OAuthLoginRequest, OAuthLoginResponse, OAuthLogoutRequest,
     OAuthStatusResponse, TestMcpConnectionRequest, UpdateMcpServerRequest,
+};
+// fork(newapi)
+pub use newapi_auth::{
+    NewApiAuthChangedEvent, NewApiAuthReason, NewApiAuthState, NewApiLoginStartResponse, NewApiStatusResponse,
 };
 pub use office::{
     CellCoord, CellRange, ConversionResultDto, ConversionTarget, DocumentConversionRequest, DocumentConversionResponse,
