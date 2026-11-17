@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "version": "2.3.0",
+  "assets": {
+    "linux-x64": {
+      "file": "opencode-linux-x64.tar.gz",
+      "sha256": "fc0f81522aceeabac47693d88389efa2bc517ce74c2c38fd6967819fcc6e4d3b",
+      "executable": "opencode"
+    }
+  }
+}
