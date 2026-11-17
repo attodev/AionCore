@@ -39,11 +39,12 @@ pub async fn run_prepare_managed_resources(args: PrepareManagedResourcesArgs) ->
     let runtime_key = current_runtime_key()
         .ok_or_else(|| prepare_managed_resources_error("contract.runtime_key"))?
         .to_owned();
+    let opencode_clis = super::opencode_bundle_fork::bundle_for_contract(&output_root).await?; // fork(opencode)
     let contract = ManagedResourcesContract {
         schema_version: MANAGED_RESOURCES_CONTRACT_SCHEMA_VERSION,
         runtime_key,
         node,
-        clis: Vec::new(),
+        clis: opencode_clis, // fork(opencode)
     };
     let manifest_path = write_contract(&output_root, &contract)
         .map_err(|error| prepare_managed_resources_error_with_detail("contract.write", error))?;

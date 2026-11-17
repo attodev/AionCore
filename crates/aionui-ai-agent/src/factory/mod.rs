@@ -5,6 +5,7 @@ mod acp_launch_policy;
 pub(crate) mod aionrs;
 mod antigravity;
 mod context;
+mod opencode_fork; // fork(opencode)
 
 use std::path::PathBuf;
 use std::sync::Arc;

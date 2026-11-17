@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 /// global / pnpm / yarn typically ship as `name.cmd`, and a user with a
 /// trimmed `PATHEXT` would otherwise see them as missing.
 pub fn resolve_command_path(cmd: &str) -> Option<PathBuf> {
+    crate::opencode_fork::return_if_overridden!(cmd); // fork(opencode)
     which::which(cmd).ok().or_else(|| windows_shim_fallback(cmd))
 }
 

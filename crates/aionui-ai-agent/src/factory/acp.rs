@@ -187,6 +187,7 @@ pub(super) async fn build(
             runtime_env: &ctx.runtime_env,
         },
     );
+    super::opencode_fork::apply_opencode_env(&deps, &ctx, &config, &mut command_spec).await; // fork(opencode)
 
     // Skill delivery args for the ACP lane. These come straight from
     // `agent_metadata`, so giving a newly probed vendor an equivalent flag is a
