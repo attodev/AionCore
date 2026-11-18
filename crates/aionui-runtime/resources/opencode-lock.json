@@ -6,6 +6,11 @@
       "file": "opencode-linux-x64.tar.gz",
       "sha256": "fc0f81522aceeabac47693d88389efa2bc517ce74c2c38fd6967819fcc6e4d3b",
       "executable": "opencode"
+    },
+    "darwin-arm64": {
+      "file": "opencode-darwin-arm64.zip",
+      "sha256": "7907df2b12720a840fbb49c5b978b9b82925b6bf75479a5fd216afa8932b6702",
+      "executable": "opencode"
     }
   }
 }

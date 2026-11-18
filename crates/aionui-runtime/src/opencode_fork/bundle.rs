@@ -75,12 +75,12 @@ pub(crate) async fn bundle_opencode_from(
     runtime_key: &str,
     output_root: &Path,
 ) -> Result<ManagedCliResourceContract, OpencodeBundleError> {
-    if !asset.file.ends_with(".tar.gz") {
+    let Some(kind) = ArchiveKind::of(&asset.file) else {
         return Err(fail(
             "download",
-            format!("unsupported archive type for {} (only .tar.gz)", asset.file),
+            format!("unsupported archive type for {} (only .tar.gz and .zip)", asset.file),
         ));
-    }
+    };
     let work = TempWorkDir::create(output_root)?;
     let archive_path = work.path().join("archive.download");
     let url = format!("{}/v{version}/{}", base.trim_end_matches('/'), asset.file);
@@ -88,7 +88,10 @@ pub(crate) async fn bundle_opencode_from(
     download_verified(&url, &asset.file, &asset.sha256, &archive_path).await?;
 
     let extract_dir = work.path().join("extract");
-    extract_tar_gz(&archive_path, &extract_dir, &asset.file)?;
+    match kind {
+        ArchiveKind::TarGz => extract_tar_gz(&archive_path, &extract_dir, &asset.file)?,
+        ArchiveKind::Zip => extract_zip(&archive_path, &extract_dir, &asset.file)?,
+    }
     check_executable(&extract_dir, &asset.executable)?;
 
     let exported = export_cli_to_root(output_root, &extract_dir, OPENCODE_COMMAND, version, runtime_key);
@@ -107,6 +110,26 @@ pub(crate) async fn bundle_opencode_from(
         required_files: Vec::new(),
         required_directories: Vec::new(),
     })
+}
+
+/// Archive formats of the upstream release assets: Linux ships `.tar.gz`,
+/// macOS and Windows ship `.zip`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArchiveKind {
+    TarGz,
+    Zip,
+}
+
+impl ArchiveKind {
+    fn of(file: &str) -> Option<Self> {
+        if file.ends_with(".tar.gz") {
+            Some(Self::TarGz)
+        } else if file.ends_with(".zip") {
+            Some(Self::Zip)
+        } else {
+            None
+        }
+    }
 }
 
 /// Scratch directory inside the bundle root, removed on drop so no failure
@@ -221,6 +244,51 @@ fn extract_tar_gz(archive_path: &Path, dest: &Path, file: &str) -> Result<(), Op
         let unpacked = entry.unpack_in(dest).map_err(|error| extract_err(error.to_string()))?;
         if !unpacked {
             return Err(extract_err("archive entry escapes the extraction directory".into()));
+        }
+    }
+    Ok(())
+}
+
+/// Same rules as `extract_tar_gz`: regular files and directories only, and no
+/// entry may be absolute or climb out via `..`. Unix permission bits stored in
+/// the archive are kept so the executable stays executable.
+fn extract_zip(archive_path: &Path, dest: &Path, file: &str) -> Result<(), OpencodeBundleError> {
+    let extract_err = |detail: String| fail("extract", format!("{file}: {detail}"));
+    fs::create_dir_all(dest).map_err(|error| extract_err(error.to_string()))?;
+    let archive_file = fs::File::open(archive_path).map_err(|error| extract_err(error.to_string()))?;
+    let mut archive = zip::ZipArchive::new(archive_file).map_err(|error| extract_err(error.to_string()))?;
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| extract_err(error.to_string()))?;
+        let raw_path = PathBuf::from(entry.name().replace('\\', "/"));
+        if raw_path
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
+        {
+            return Err(extract_err("archive entry has an absolute or parent path".into()));
+        }
+        let Some(relative) = entry.enclosed_name() else {
+            return Err(extract_err("archive entry escapes the extraction directory".into()));
+        };
+        if !(entry.is_file() || entry.is_dir()) {
+            return Err(extract_err("archive entry is not a regular file or directory".into()));
+        }
+        let target = dest.join(relative);
+        if entry.is_dir() {
+            fs::create_dir_all(&target).map_err(|error| extract_err(error.to_string()))?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|error| extract_err(error.to_string()))?;
+        }
+        let mut out = fs::File::create(&target).map_err(|error| extract_err(error.to_string()))?;
+        std::io::copy(&mut entry, &mut out).map_err(|error| extract_err(error.to_string()))?;
+        #[cfg(unix)]
+        if let Some(mode) = entry.unix_mode() {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&target, fs::Permissions::from_mode(mode & 0o777))
+                .map_err(|error| extract_err(error.to_string()))?;
         }
     }
     Ok(())
@@ -472,5 +540,108 @@ mod tests {
         assert_eq!(first, second);
         let bin = out.path().join("cli/opencode/2.3.0").join(KEY).join("opencode");
         assert_eq!(std::fs::read(bin).unwrap(), b"bin");
+    }
+
+    const ZIP_KEY: &str = "darwin-arm64";
+    const ZIP_FILE: &str = "opencode-darwin-arm64.zip";
+
+    /// Builds a zip; `mode` 0o755 for executables.
+    fn zip_bytes(entries: &[(&str, &[u8], u32)]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, data, mode) in entries {
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored)
+                .unix_permissions(*mode);
+            writer.start_file(*name, options).unwrap();
+            std::io::Write::write_all(&mut writer, data).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
+
+    fn zip_asset_for(bytes: &[u8]) -> OpencodeAsset {
+        OpencodeAsset {
+            file: ZIP_FILE.into(),
+            sha256: hex::encode(Sha256::digest(bytes)),
+            executable: "opencode".into(),
+        }
+    }
+
+    async fn serve_zip(bytes: Vec<u8>) -> MockServer {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v2.3.0/{ZIP_FILE}")))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(bytes))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    #[tokio::test]
+    async fn bundles_binary_from_zip() {
+        let archive = zip_bytes(&[("opencode", b"#!/bin/sh\necho 2.3.0\n", 0o755)]);
+        let asset = zip_asset_for(&archive);
+        let server = serve_zip(archive).await;
+        let out = tempfile::tempdir().unwrap();
+
+        let contract = bundle_opencode_from(&server.uri(), &asset, "2.3.0", ZIP_KEY, out.path())
+            .await
+            .unwrap();
+
+        assert_eq!(contract.root, "cli/opencode/2.3.0/darwin-arm64");
+        let binary = out.path().join("cli/opencode/2.3.0/darwin-arm64/opencode");
+        assert!(binary.is_file());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_ne!(fs::metadata(&binary).unwrap().permissions().mode() & 0o111, 0);
+        }
+        assert_leftovers_clean(out.path());
+    }
+
+    #[tokio::test]
+    async fn zip_with_non_executable_binary_fails() {
+        let archive = zip_bytes(&[("opencode", b"x", 0o644)]);
+        let asset = zip_asset_for(&archive);
+        let server = serve_zip(archive).await;
+        let out = tempfile::tempdir().unwrap();
+
+        let error = bundle_opencode_from(&server.uri(), &asset, "2.3.0", ZIP_KEY, out.path())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.stage, "verify");
+    }
+
+    #[tokio::test]
+    async fn zip_with_parent_path_fails() {
+        let archive = zip_bytes(&[("../evil", b"x", 0o755), ("opencode", b"x", 0o755)]);
+        let asset = zip_asset_for(&archive);
+        let server = serve_zip(archive).await;
+        let out = tempfile::tempdir().unwrap();
+        let nested = out.path().join("bundle");
+        fs::create_dir_all(&nested).unwrap();
+
+        let error = bundle_opencode_from(&server.uri(), &asset, "2.3.0", ZIP_KEY, &nested)
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.stage, "extract");
+        assert!(!out.path().join("evil").exists());
+    }
+
+    #[tokio::test]
+    async fn unknown_archive_type_is_rejected() {
+        let asset = OpencodeAsset {
+            file: "opencode-linux-x64.tar.xz".into(),
+            sha256: String::new(),
+            executable: "opencode".into(),
+        };
+        let out = tempfile::tempdir().unwrap();
+
+        let error = bundle_opencode_from("http://127.0.0.1:9", &asset, "2.3.0", KEY, out.path())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.stage, "download");
     }
 }

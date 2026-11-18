@@ -14,7 +14,7 @@ Each source file starts with a `// fork(opencode): ... — see docs/fork/opencod
 | --- | --- |
 | `crates/aionui-runtime/resources/opencode-lock.json` | Version lock: `version`, and per runtime key the asset file name, `sha256` and executable name |
 | `crates/aionui-runtime/src/opencode_fork/mod.rs` | Lock parsing, executable resolution (env, bundle, PATH), the `return_if_overridden!` macro |
-| `crates/aionui-runtime/src/opencode_fork/bundle.rs` | Download of the locked asset, SHA-256 check, tar.gz extraction, placement in the bundle |
+| `crates/aionui-runtime/src/opencode_fork/bundle.rs` | Download of the locked asset, SHA-256 check, tar.gz / zip extraction, placement in the bundle |
 | `crates/aionui-app/src/commands/opencode_bundle_fork.rs` | Glue that runs the bundling step inside `prepare-managed-resources` |
 | `crates/aionui-ai-agent/src/factory/opencode_fork.rs` | Provider config JSON and the environment overlay for the `opencode` backend |
 | `docs/fork/opencode-probe-notes.md` | Observed facts about opencode 2.3.0 that the overlay relies on |
@@ -47,10 +47,10 @@ Every hook carries the marker `fork(opencode)`. Find them all with `grep -rn "fo
 | Item | Value |
 | --- | --- |
 | Pinned version | `2.3.0` (`crates/aionui-runtime/resources/opencode-lock.json`) |
-| Locked platforms | `linux-x64` only; asset `opencode-linux-x64.tar.gz` |
+| Locked platforms | `linux-x64` (asset `opencode-linux-x64.tar.gz`) and `darwin-arm64` (asset `opencode-darwin-arm64.zip`) |
 | Executable resolution | `AIONUI_OPENCODE_BIN` (absolute path to a regular file) → bundle (`cli_sources("opencode", <locked version>, <runtime key>)`) → PATH. Applied only when the command is exactly `opencode`; other commands resolve as before. The source (env override / bundle / PATH) is logged once per process at `info`; a PATH hit logs a `warn` that the pinned version is not in use. |
 | Download base | `AIONUI_OPENCODE_DOWNLOAD_BASE` (default `https://github.com/anomalyco/opencode/releases/download`; `v<version>/<file>` is appended) |
-| Download checks | SHA-256 of the archive is compared with the lock before extraction; only `.tar.gz` assets are supported |
+| Download checks | SHA-256 of the archive is compared with the lock before extraction; `.tar.gz` and `.zip` assets are supported (regular files and directories only, no absolute or `..` paths) |
 | Bundle layout | `<bundle root>/cli/opencode/<version>/<runtime_key>/opencode` |
 | Backend | Overlay applies only to the agent whose backend is `opencode` |
 | Managed provider | `newapi-managed` (from the newapi overlay); models with `model_enabled[id] == false` are excluded |
@@ -67,7 +67,7 @@ Every hook carries the marker `fork(opencode)`. Find them all with `grep -rn "fo
 ## Bumping the pinned opencode version
 
 1. Edit `version` and the asset `sha256` (and `file` if the name changed) in `crates/aionui-runtime/resources/opencode-lock.json`. Update the version string in this document, the `LOCK_VERSION` constant in `scripts/fork/check-opencode-overlay.sh`, the hard-coded version and file name in the test `lock_parses_and_pins_2_3_0` (`crates/aionui-runtime/src/opencode_fork/mod.rs`), and the version reference in the AionUi-side doc (`AionUi/docs/fork/opencode-overlay.md`).
-   Adding a platform: add an `assets` entry keyed by the runtime key (`current_runtime_key()` value) with `file`, `sha256` and `executable`; only `.tar.gz` assets are supported for now.
+   Adding a platform: add an `assets` entry keyed by the runtime key (`current_runtime_key()` value) with `file`, `sha256` and `executable`; `.tar.gz` and `.zip` assets are supported.
 2. Re-run every row of `docs/fork/opencode-probe-notes.md` against the new binary and update that file.
 3. If the config format changed, edit only `crates/aionui-ai-agent/src/factory/opencode_fork.rs`.
 4. Run `bash scripts/fork/check-opencode-overlay.sh` and the tests (`cargo test -p aionui-runtime`, `cargo test -p aionui-ai-agent`, `cargo test -p aionui-app`).
@@ -113,7 +113,7 @@ The branch is kept as three commits: (1) fork-owned files, (2) hooks and mechani
 ## Known follow-ups
 
 - Servers written by the upstream MCP sync (`OpencodeAdapter`) into `~/.config/opencode` no longer reach AionCore-spawned opencode because of `OPENCODE_CONFIG_DIR`.
-- Only `linux-x64` is locked. On other platforms bundling is skipped with a warning; zip assets are not supported.
+- Only `linux-x64` and `darwin-arm64` are locked. On other platforms bundling is skipped with a warning. The probe notes were recorded on linux-x64 only; the `darwin-arm64` binary was bundled and detected but the probes were not re-run on macOS.
 - Installer packaging and a fork release are not done.
 - After a re-login a running opencode process keeps the old key until its runtime is restarted.
 - opencode 2.x allows paths outside the project by default; no policy is added yet.

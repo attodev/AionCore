@@ -140,6 +140,9 @@ mod tests {
         assert_eq!(asset.file, "opencode-linux-x64.tar.gz");
         assert_eq!(asset.sha256.len(), 64);
         assert!(asset.sha256.chars().all(|c| c.is_ascii_hexdigit()));
+        let mac = locked_asset("darwin-arm64").expect("macOS arm64 asset");
+        assert_eq!(mac.file, "opencode-darwin-arm64.zip");
+        assert_eq!(mac.sha256.len(), 64);
         assert!(locked_asset("nope").is_none());
     }
 
