@@ -35,6 +35,7 @@ hook_re() { # file, regex, description
 
 R=crates/aionui-app/src/router
 hook $R/routes.rs 'merge_newapi_routes(router, services, auth_mw_state.clone()); // fork(newapi)' 'newapi route merge'
+hook $R/routes.rs ') || super::newapi_fork::is_global_event(event_name) // fork(newapi)' 'newapi global event'
 hook $R/mod.rs 'mod newapi_fork; // fork(newapi)' 'newapi_fork module declaration'
 hook crates/aionui-system/src/lib.rs 'pub mod newapi_auth; // fork(newapi)' 'newapi_auth module declaration'
 hook crates/aionui-system/src/lib.rs 'newapi_auth_routes}; // fork(newapi)' 'newapi_auth re-exports'
@@ -53,7 +54,7 @@ if grep -q newapi $R/state.rs; then
   echo "LEFTOVER: $R/state.rs must not mention newapi (it must stay identical to upstream)" >&2; fail=1
 fi
 c=$(grep -c newapi $R/routes.rs || true)
-[ "$c" -eq 1 ] || { echo "LEFTOVER: $R/routes.rs must have exactly one newapi line, found $c" >&2; fail=1; }
+[ "$c" -eq 3 ] || { echo "LEFTOVER: $R/routes.rs must have exactly three newapi lines (route merge, global event, its test), found $c" >&2; fail=1; }
 
 if [ "$fail" -ne 0 ]; then
   echo "newapi overlay check FAILED" >&2

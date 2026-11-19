@@ -38,3 +38,9 @@ pub(super) fn merge_newapi_routes(router: Router, services: &AppServices, auth_m
         router
     }
 }
+
+/// The login state belongs to the whole local app, and its event carries no `user_id`,
+/// so the websocket bridge must deliver it to every connection instead of dropping it.
+pub(super) fn is_global_event(event_name: &str) -> bool {
+    event_name == aionui_system::newapi_auth::service::EVENT_AUTH_CHANGED
+}
