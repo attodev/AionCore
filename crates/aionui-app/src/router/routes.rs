@@ -546,7 +546,7 @@ fn is_global_websocket_event(event_name: &str) -> bool {
     matches!(
         event_name,
         "runtime.statusChanged" | "extensions.lifecycle" | "hub.state-changed"
-    )
+    ) || super::newapi_fork::is_global_event(event_name) // fork(newapi)
 }
 
 async fn normalize_boundary_error_response(request: Request, next: Next) -> Response {
@@ -641,6 +641,13 @@ mod tests {
             let (_, actual_code) = boundary_error_for_status(status).expect("status should be normalized");
             assert_eq!(actual_code, code);
         }
+    }
+
+    #[test]
+    fn fork_auth_event_is_global() {
+        assert!(is_global_websocket_event(
+            aionui_system::newapi_auth::service::EVENT_AUTH_CHANGED
+        ));
     }
 
     #[test]
