@@ -133,9 +133,9 @@ mod tests {
     }
 
     #[test]
-    fn lock_parses_and_pins_2_3_0() {
+    fn lock_parses_and_pins_2_3_2() {
         let lock = opencode_lock();
-        assert_eq!(lock.version, "2.3.0");
+        assert_eq!(lock.version, "2.3.2");
         let asset = locked_asset("linux-x64").expect("linux asset");
         assert_eq!(asset.file, "opencode-linux-x64.tar.gz");
         assert_eq!(asset.sha256.len(), 64);

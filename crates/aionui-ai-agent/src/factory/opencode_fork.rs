@@ -229,6 +229,12 @@ async fn apply_env(
         name: "OPENCODE_CONFIG".into(),
         value: String::new(),
     });
+    // Since 2.3.1 opencode puts the user's ~/.claude/CLAUDE.md into the prompt when the
+    // (empty) config dir has no AGENTS.md; personal instructions must not reach the gateway.
+    vars.push(EnvVar {
+        name: "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT".into(),
+        value: "1".into(),
+    });
     let shadowed = finalize_env(&mut spec.env, vars, inherited);
     if !shadowed.is_empty() {
         tracing::info!(names = ?shadowed, "shadowed inherited OPENCODE_* variables for opencode");
@@ -463,6 +469,7 @@ mod tests {
         assert_eq!(env_value(&spec.env, "OPENCODE_DISABLE_AUTOUPDATE"), Some("1"));
         assert_eq!(env_value(&spec.env, "OPENCODE_CONFIG"), Some(""));
         assert_eq!(env_value(&spec.env, "OPENCODE_DISABLE_PROJECT_CONFIG"), Some("1"));
+        assert_eq!(env_value(&spec.env, "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"), Some("1"));
         assert_eq!(env_value(&spec.env, "OPENCODE_CONFIG_PROJECT_DISABLE"), Some("1"));
         let dir = f.dir.path().join("opencode-config");
         assert_eq!(env_value(&spec.env, "OPENCODE_CONFIG_DIR"), Some(dir.to_str().unwrap()));
@@ -579,9 +586,10 @@ mod tests {
         add_provider(&f, SECRET, r#"["a","b","c"]"#, Some(r#"{"b":false,"a":true}"#)).await;
         let mut spec = CommandSpec::default();
         run(&f, Some("opencode"), Some("newapi/c"), &mut spec).await;
-        assert_eq!(spec.env.len(), 7);
+        assert_eq!(spec.env.len(), 8);
         assert_eq!(env_value(&spec.env, "OPENCODE_CONFIG_PROJECT_DISABLE"), Some("1"));
         assert_eq!(env_value(&spec.env, "OPENCODE_DISABLE_PROJECT_CONFIG"), Some("1"));
+        assert_eq!(env_value(&spec.env, "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT"), Some("1"));
         let cfg: Value = serde_json::from_str(env_value(&spec.env, "OPENCODE_CONFIG_CONTENT").unwrap()).unwrap();
         let models = cfg["providers"]["newapi"]["models"].as_object().unwrap();
         assert_eq!(models.keys().collect::<Vec<_>>(), ["a", "c"]);

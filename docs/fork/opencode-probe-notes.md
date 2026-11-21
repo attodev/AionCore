@@ -1,4 +1,4 @@
-# opencode 2.3.0 probe notes
+# opencode probe notes (pinned: 2.3.2)
 
 Recorded 2026-11-17 on linux-x64 against a local new-api gateway with a mock upstream.
 These are observations the opencode overlay relies on. Re-run them whenever the pinned
@@ -27,6 +27,23 @@ version in `crates/aionui-runtime/resources/opencode-lock.json` changes.
 | Other routes (re-review, verified closed) | `OPENCODE_CLI_CONFIG_CONTENT`, a parent-directory `opencode.json`, and `OPENCODE_TEST_HOME` are closed by the overlay (project-config flag plus `OPENCODE_CONFIG_DIR`) |
 | Blanked `OPENCODE_*` | With the final overlay values plus `OPENCODE_FLAGS=`, `OPENCODE_MODELS_URL=` and `OPENCODE_CLI_CONFIG_CONTENT=` set EMPTY: opencode starts; managed -> only `newapi/a`; deny-all -> `No models are available`. Alias `1` alone (flag unset) also closes the workspace `opencode.json` in both overlays. Empty values for these three break nothing |
 | Still unverified | `/etc/opencode` system config; semantics of `OPENCODE_FLAGS` and `OPENCODE_MODELS_URL` / `OPENCODE_MODELS_PATH` (they are blanked, not understood) |
+
+## 2.3.2 re-check (2026-11-21, darwin-arm64)
+
+The pin moved from 2.3.0 to 2.3.2. The rows above were recorded for 2.3.0 on linux-x64 and were not all repeated. What was re-run, on macOS arm64 with the final overlay environment, a throwaway `HOME`, and a local stub in place of the gateway, driving `opencode acp` (`initialize`, `session/new`, `session/prompt`); every row was run against both 2.3.0 and 2.3.2:
+
+| Question | 2.3.2 result |
+|---|---|
+| Pinned assets | `opencode-linux-x64.tar.gz` SHA-256 `563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0`; `opencode-darwin-arm64.zip` SHA-256 `31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a`. Both downloaded and hashed locally; they match the digests GitHub publishes for the release. `opencode --version` prints `v2.3.2` |
+| Provider restriction | Managed overlay: model options are `['newapi/a']`. A prompt produces `POST /v1/chat/completions` on the configured base URL with `Authorization: Bearer <AIONUI_NEWAPI_KEY>` and nothing else. Same as 2.3.0 |
+| User's global config | A `~/.config/opencode/opencode.json` declaring provider `evil` plus an `allow` policy is not merged: `['newapi/a']`. Same as 2.3.0 |
+| Project config | `<cwd>/opencode.json` and `<cwd>/.opencode/opencode.json` declaring `evil`: `['newapi/a']`. Same as 2.3.0 |
+| Deny-all | `session/new` fails with `No models are available` (`errorName: CatalogNotReady`), also with project and global `evil` configs present and `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` set. Same as 2.3.0 |
+| Blanked `OPENCODE_*` | `OPENCODE_FLAGS=`, `OPENCODE_MODELS_URL=`, `OPENCODE_CLI_CONFIG_CONTENT=` empty: starts, `['newapi/a']`. Same as 2.3.0 |
+| `~/.claude/CLAUDE.md` (**changed**) | 2.3.2 puts the content of `~/.claude/CLAUDE.md` into the request sent to the gateway when the config dir has no `AGENTS.md`; 2.3.0 did not. With `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` (or `OPENCODE_DISABLE_CLAUDE_CODE=1`) it is not sent. **The overlay must set `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT`.** |
+| Workspace instruction files | With the overlay environment, neither `<cwd>/CLAUDE.md` nor `<cwd>/AGENTS.md` content appears in the request, on 2.3.0 and 2.3.2 alike. An `AGENTS.md` placed in `OPENCODE_CONFIG_DIR` is sent (the overlay keeps that directory empty); `~/.config/opencode/AGENTS.md` is not |
+
+Not re-run for 2.3.2: everything on linux-x64, the AionCore end-to-end rows (model and mode override through a real conversation), "Key on disk", "Extra downloads", `debug config` / `debug agents` checks, and the "Other routes" row. 2.3.1 also changed defaults the overlay does not control: a shell command that outlives its timeout now continues in the background, and compaction summaries are written in the background (`compaction.background`).
 
 Not covered: Windows and macOS, tool calls with a real model, permission prompts, session
 resume, MCP servers passed through ACP.

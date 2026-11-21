@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "version": "2.3.0",
+  "version": "2.3.2",
   "assets": {
     "linux-x64": {
       "file": "opencode-linux-x64.tar.gz",
-      "sha256": "fc0f81522aceeabac47693d88389efa2bc517ce74c2c38fd6967819fcc6e4d3b",
+      "sha256": "563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0",
       "executable": "opencode"
     },
     "darwin-arm64": {
       "file": "opencode-darwin-arm64.zip",
-      "sha256": "7907df2b12720a840fbb49c5b978b9b82925b6bf75479a5fd216afa8932b6702",
+      "sha256": "31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a",
       "executable": "opencode"
     }
   }

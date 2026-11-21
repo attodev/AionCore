@@ -4,7 +4,7 @@ Overlay base: 503a8719 (update this after each upstream sync)
 
 Requires the newapi overlay, branch `feat/newapi-login`, applied first (see `docs/fork/newapi-overlay.md`). This overlay is branch `feat/opencode-code-tab`, stacked on top of it.
 
-Bundles a pinned opencode (version `2.3.0`) with AionCore and launches it as an ACP agent that can only talk to the newapi gateway. The executable is resolved from an env override, then the managed-resources bundle, then PATH. When the `opencode` backend is spawned, AionCore always injects an environment overlay: with a usable `newapi-managed` provider it carries a newapi-only provider config and the key; without one it carries a deny-all config and an empty `AIONUI_NEWAPI_KEY` (fail closed). Logic lives in new files; every edit to an upstream file is a single marked line (`fork(opencode)`).
+Bundles a pinned opencode (version `2.3.2`) with AionCore and launches it as an ACP agent that can only talk to the newapi gateway. The executable is resolved from an env override, then the managed-resources bundle, then PATH. When the `opencode` backend is spawned, AionCore always injects an environment overlay: with a usable `newapi-managed` provider it carries a newapi-only provider config and the key; without one it carries a deny-all config and an empty `AIONUI_NEWAPI_KEY` (fail closed). Logic lives in new files; every edit to an upstream file is a single marked line (`fork(opencode)`).
 
 ## Fork-owned files
 
@@ -17,7 +17,7 @@ Each source file starts with a `// fork(opencode): ... — see docs/fork/opencod
 | `crates/aionui-runtime/src/opencode_fork/bundle.rs` | Download of the locked asset, SHA-256 check, tar.gz / zip extraction, placement in the bundle |
 | `crates/aionui-app/src/commands/opencode_bundle_fork.rs` | Glue that runs the bundling step inside `prepare-managed-resources` |
 | `crates/aionui-ai-agent/src/factory/opencode_fork.rs` | Provider config JSON and the environment overlay for the `opencode` backend |
-| `docs/fork/opencode-probe-notes.md` | Observed facts about opencode 2.3.0 that the overlay relies on |
+| `docs/fork/opencode-probe-notes.md` | Observed facts about opencode 2.3.2 that the overlay relies on |
 | `scripts/fork/check-opencode-overlay.sh` | Verifies files and hooks are present |
 | `docs/fork/opencode-overlay.md` | This document |
 
@@ -46,7 +46,7 @@ Every hook carries the marker `fork(opencode)`. Find them all with `grep -rn "fo
 
 | Item | Value |
 | --- | --- |
-| Pinned version | `2.3.0` (`crates/aionui-runtime/resources/opencode-lock.json`) |
+| Pinned version | `2.3.2` (`crates/aionui-runtime/resources/opencode-lock.json`) |
 | Locked platforms | `linux-x64` (asset `opencode-linux-x64.tar.gz`) and `darwin-arm64` (asset `opencode-darwin-arm64.zip`) |
 | Executable resolution | `AIONUI_OPENCODE_BIN` (absolute path to a regular file) → bundle (`cli_sources("opencode", <locked version>, <runtime key>)`) → PATH. Applied only when the command is exactly `opencode`; other commands resolve as before. The source (env override / bundle / PATH) is logged once per process at `info`; a PATH hit logs a `warn` that the pinned version is not in use. |
 | Download base | `AIONUI_OPENCODE_DOWNLOAD_BASE` (default `https://github.com/anomalyco/opencode/releases/download`; `v<version>/<file>` is appended) |
@@ -54,19 +54,20 @@ Every hook carries the marker `fork(opencode)`. Find them all with `grep -rn "fo
 | Bundle layout | `<bundle root>/cli/opencode/<version>/<runtime_key>/opencode` |
 | Backend | Overlay applies only to the agent whose backend is `opencode` |
 | Managed provider | `newapi-managed` (from the newapi overlay); models with `model_enabled[id] == false` are excluded |
-| With a usable provider | `OPENCODE_CONFIG_CONTENT` (JSON), `AIONUI_NEWAPI_KEY` (the key), `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_CONFIG_DIR=<data_dir>/opencode-config`, `OPENCODE_CONFIG=""`, `OPENCODE_DISABLE_PROJECT_CONFIG=1`, `OPENCODE_CONFIG_PROJECT_DISABLE=1` (alias, takes precedence) |
-| Without one (fail closed) | A deny-all config, `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG=""`, `OPENCODE_DISABLE_PROJECT_CONFIG=1`, `OPENCODE_CONFIG_PROJECT_DISABLE=1`, and `AIONUI_NEWAPI_KEY=""` (empty, shadowing any key inherited from the shell or the backend environment) |
+| With a usable provider | `OPENCODE_CONFIG_CONTENT` (JSON), `AIONUI_NEWAPI_KEY` (the key), `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_CONFIG_DIR=<data_dir>/opencode-config`, `OPENCODE_CONFIG=""`, `OPENCODE_DISABLE_PROJECT_CONFIG=1`, `OPENCODE_CONFIG_PROJECT_DISABLE=1` (alias, takes precedence), `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1` |
+| Without one (fail closed) | A deny-all config, `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG=""`, `OPENCODE_DISABLE_PROJECT_CONFIG=1`, `OPENCODE_CONFIG_PROJECT_DISABLE=1`, `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1`, and `AIONUI_NEWAPI_KEY=""` (empty, shadowing any key inherited from the shell or the backend environment) |
 | Config JSON | `"update": "disable"`; provider id `newapi` with `"package": "@opencode/ai/providers/openai-compatible"` and `settings.baseURL` = managed provider `base_url`; `settings.apiKey` = `{env:AIONUI_NEWAPI_KEY}` (the key itself is never in the JSON); `policies` = deny `provider.use` on `*`, then allow `provider.use` on `newapi` |
 | Model ids inside opencode | `newapi/<model id>` |
 | Why `OPENCODE_CONFIG_DIR` | Without it opencode merges the user's `~/.config/opencode/opencode.json` (see probe notes). The overlay never writes to the user's home and does not touch `XDG_*`. |
 | Why `OPENCODE_DISABLE_PROJECT_CONFIG` | opencode loads `<cwd>/opencode.json` and `<cwd>/.opencode/opencode.json` even with `OPENCODE_CONFIG_DIR` and `OPENCODE_CONFIG_CONTENT` set; a repository could declare its own provider plus an `allow` policy and receive prompts and code. The flag closes both locations (probe notes). Side effect: project agents and project MCP servers/instructions from project config are ignored too. |
+| Why `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | Since opencode 2.3.1 the user's `~/.claude/CLAUDE.md` is added to the system prompt when the global `AGENTS.md` is missing, and the overlay's config dir is empty by design. Personal instructions from another tool would be sent to the gateway with every request. The flag restores the 2.3.0 behaviour (probe notes). |
 | Inherited `OPENCODE_*` | Every other `OPENCODE_*` variable the child would inherit (from `agent_process_env()` or already in the spec) is set to an empty value, so a user's shell settings (`OPENCODE_FLAGS`, `OPENCODE_MODELS_URL`, `OPENCODE_CLI_CONFIG_CONTENT`, ...) are not visible to opencode. Only names are logged, at `info`. |
 | Provider `enabled` flag | The managed provider row's own `enabled` flag is not consulted; only its key and per-model `model_enabled` are. |
 | Logging | The key and the config JSON are never logged |
 
 ## Bumping the pinned opencode version
 
-1. Edit `version` and the asset `sha256` (and `file` if the name changed) in `crates/aionui-runtime/resources/opencode-lock.json`. Update the version string in this document, the `LOCK_VERSION` constant in `scripts/fork/check-opencode-overlay.sh`, the hard-coded version and file name in the test `lock_parses_and_pins_2_3_0` (`crates/aionui-runtime/src/opencode_fork/mod.rs`), and the version reference in the AionUi-side doc (`AionUi/docs/fork/opencode-overlay.md`).
+1. Edit `version` and the asset `sha256` (and `file` if the name changed) in `crates/aionui-runtime/resources/opencode-lock.json`. Update the version string in this document, the `LOCK_VERSION` constant in `scripts/fork/check-opencode-overlay.sh`, the hard-coded version and file name in the test `lock_parses_and_pins_2_3_2` (`crates/aionui-runtime/src/opencode_fork/mod.rs`), and the version reference in the AionUi-side doc (`AionUi/docs/fork/opencode-overlay.md`).
    Adding a platform: add an `assets` entry keyed by the runtime key (`current_runtime_key()` value) with `file`, `sha256` and `executable`; `.tar.gz` and `.zip` assets are supported.
 2. Re-run every row of `docs/fork/opencode-probe-notes.md` against the new binary and update that file.
 3. If the config format changed, edit only `crates/aionui-ai-agent/src/factory/opencode_fork.rs`.

@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 hooks=0
 negs=0
-LOCK_VERSION=2.3.0   # must match docs/fork/opencode-overlay.md "Pinned version"
+LOCK_VERSION=2.3.2   # must match docs/fork/opencode-overlay.md "Pinned version"
 files=(
   crates/aionui-runtime/resources/opencode-lock.json
   crates/aionui-runtime/src/opencode_fork/mod.rs
